@@ -77,23 +77,35 @@ def get_cust():
     return jsonify(cursor.fetchall())
 
 @app.route('/customers/<int:id>', methods=['GET'])
-def get_one_cust(id):  # Use function parameter instead of request.args
+def get_one_cust(id):
     cursor.execute("""
         SELECT customer_id AS ID, first_name AS FIRST, last_name AS LAST, email AS EMAIL 
         FROM sakila.customer WHERE customer_id = %s;
     """, (id,))
     result = cursor.fetchone()
-    return jsonify(result) if result else jsonify({"error": "Customer not found"}), 404
+    
+    if result:
+        return jsonify(result)  # Customer exists, return data
+    else:
+        return jsonify({"error": "Customer not found"}), 404  # Explicit 404 error
+
+
+
 
 @app.route('/customers', methods=['POST'])
 def add_customer():
     data = request.get_json()
+
     cursor.execute("""
-        INSERT IGNORE INTO customer (store_id, first_name, last_name, email) 
-        VALUES (%s, %s, %s, %s);
-    """, (1, data['first_name'], data['last_name'], data['email']))  # Default store_id to 1
+        INSERT INTO customer (store_id, first_name, last_name, email, address_id) 
+        VALUES (%s, %s, %s, %s, %s);
+    """, (1, data['first_name'], data['last_name'], data['email'], 1))
+
+    new_id = cursor.lastrowid  # Get auto-generated ID
     db.commit()
-    return jsonify({"message": "Customer added successfully"}), 201
+    
+    return jsonify({"message": "Customer added successfully", "customer_id": new_id}), 201
+
 
 @app.route('/customers/<int:id>', methods=['DELETE'])
 def delete_customer(id):
