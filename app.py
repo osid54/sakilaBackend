@@ -77,7 +77,7 @@ def get_cust():
 @app.route('/customers/<int:id>', methods=['GET'])
 def get_one_cust(id):
     cursor.execute("""
-        select customer_id as id, first_name as first, last_name as last, email as email 
+        select customer_id as id, first_name as "FIRST", last_name as "LAST", email as EMAIL 
         from sakila.customer where customer_id = %s;
     """, (id,))
     result = cursor.fetchone()
