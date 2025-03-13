@@ -1,12 +1,11 @@
-
 from flask import Flask, request, jsonify
 from flask_cors import CORS, cross_origin
+from datetime import datetime
 import mysql.connector
 
 app = Flask(__name__)
 CORS(app)
 
-# Connect to MySQL
 db = mysql.connector.connect(
     host="127.0.0.1",
     user="root",
@@ -17,7 +16,7 @@ cursor = db.cursor(dictionary=True)
 
 @app.route('/films', methods=['GET'])
 def get_films():
-    cursor.execute("""SELECT * FROM sakila.film_list;""")
+    cursor.execute("select * from sakila.film_list;")
     response = jsonify(cursor.fetchall())
     return response
 
@@ -53,8 +52,8 @@ def get_t5a():
 
 @app.route('/actor5films', methods=['GET'])
 def get_a5f():
-    actorID = request.args.get('id')
-    cursor.execute("""select f.title as TITLE from rental as r
+    actor_id = request.args.get('id')
+    cursor.execute("""select f.title as title from rental as r
         join inventory as i
         on r.inventory_id = i.inventory_id
         join film as f
@@ -64,67 +63,62 @@ def get_a5f():
         where fa.actor_id = %s
         group by i.film_id
         order by count(r.rental_id) desc
-        limit 5;""", (actorID,))
+        limit 5;""", (actor_id,))
     response = jsonify(cursor.fetchall())
     return response
 
 @app.route('/customers', methods=['GET'])
 def get_cust():
     cursor.execute("""
-        SELECT customer_id AS ID, first_name AS FIRST, last_name AS LAST, email AS EMAIL 
-        FROM sakila.customer;
+        select customer_id as ID, first_name as "FIRST", last_name as "LAST", email as EMAIL from sakila.customer;;
     """)
     return jsonify(cursor.fetchall())
 
 @app.route('/customers/<int:id>', methods=['GET'])
 def get_one_cust(id):
     cursor.execute("""
-        SELECT customer_id AS ID, first_name AS FIRST, last_name AS LAST, email AS EMAIL 
-        FROM sakila.customer WHERE customer_id = %s;
+        select customer_id as id, first_name as first, last_name as last, email as email 
+        from sakila.customer where customer_id = %s;
     """, (id,))
     result = cursor.fetchone()
     
     if result:
-        return jsonify(result)  # Customer exists, return data
+        return jsonify(result)
     else:
-        return jsonify({"error": "Customer not found"}), 404  # Explicit 404 error
-
-
-
+        return jsonify({"error": "Customer not found"}), 404
 
 @app.route('/customers', methods=['POST'])
 def add_customer():
     data = request.get_json()
-
+    
     cursor.execute("""
-        INSERT INTO customer (store_id, first_name, last_name, email, address_id) 
-        VALUES (%s, %s, %s, %s, %s);
+        insert into customer (store_id, first_name, last_name, email, address_id) 
+        values (%s, %s, %s, %s, %s);
     """, (1, data['first_name'], data['last_name'], data['email'], 1))
-
-    new_id = cursor.lastrowid  # Get auto-generated ID
+    
+    new_id = cursor.lastrowid
     db.commit()
     
     return jsonify({"message": "Customer added successfully", "customer_id": new_id}), 201
 
-
 @app.route('/customers/<int:id>', methods=['DELETE'])
 def delete_customer(id):
-    cursor.execute("DELETE FROM customer WHERE customer_id = %s;", (id,))
+    cursor.execute("delete from customer where customer_id = %s;", (id,))
     db.commit()
-    return jsonify({"message": "Customer deleted successfully"})
+    return jsonify({"message": "Customer deleted successfully"}), 200
 
 @app.route('/customers/<int:id>', methods=['PUT', 'PATCH'])
 def update_customer(id):
     data = request.get_json()
-
-    if request.method == 'PUT':  # Full update (All fields required)
+    
+    if request.method == 'PUT': 
         cursor.execute("""
-            UPDATE customer 
-            SET first_name=%s, last_name=%s, email=%s 
-            WHERE customer_id=%s
+            update customer 
+            set first_name=%s, last_name=%s, email=%s 
+            where customer_id=%s
         """, (data['first_name'], data['last_name'], data['email'], id))
-
-    elif request.method == 'PATCH':  # Partial update
+    
+    elif request.method == 'PATCH':  
         updates = []
         values = []
         if 'first_name' in data:
@@ -136,16 +130,34 @@ def update_customer(id):
         if 'email' in data:
             updates.append("email=%s")
             values.append(data['email'])
-
-        if updates:  # Avoid running an empty SQL query
-            query = f"UPDATE customer SET {', '.join(updates)} WHERE customer_id=%s"
+        
+        if updates:  
+            query = f"update customer set {', '.join(updates)} where customer_id=%s"
             values.append(id)
             cursor.execute(query, values)
-
+    
     db.commit()
-    return jsonify({"message": "Customer updated successfully"})
+    return jsonify({"message": "Customer updated successfully"}), 200
 
+@app.route('/customers/<int:customer_id>/rentals', methods=['GET'])
+def get_rental_history(customer_id):
+    cursor.execute("""
+        select rental_id, rental_date, return_date 
+        from rental 
+        where customer_id = %s;
+    """, (customer_id,))
+    rentals = cursor.fetchall()
+    return jsonify(rentals)
 
+@app.route('/rentals/<int:rental_id>/return', methods=['PATCH'])
+def mark_rental_returned(rental_id):
+    cursor.execute("""
+        update rental
+        set return_date = now()
+        where rental_id = %s and return_date is null;
+    """, (rental_id,))
+    db.commit()
+    return jsonify({"message": "Rental marked as returned"}), 200
 
 if __name__ == '__main__':
     app.run(port=5000, debug=True)
