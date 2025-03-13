@@ -159,7 +159,7 @@ def mark_rental_returned(rental_id):
     db.commit()
     return jsonify({"message": "Rental marked as returned"}), 200
 
-@app.route('/rentals', methods=['POST'])
+@app.route('/rent', methods=['POST'])
 def rent_film():
     data = request.json
     customer_id = data.get("customer_id")
