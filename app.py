@@ -159,5 +159,38 @@ def mark_rental_returned(rental_id):
     db.commit()
     return jsonify({"message": "Rental marked as returned"}), 200
 
+@app.route('/rentals', methods=['POST'])
+def rent_film():
+    data = request.json
+    customer_id = data.get("customer_id")
+    film_id = data.get("film_id")
+    staff_id = 1 
+
+    if not customer_id or not film_id:
+        return jsonify({"error": "Missing customer_id or film_id"}), 400
+
+    cursor.execute("""
+        select inventory_id from inventory 
+        where film_id = %s 
+        and inventory_id not in (select inventory_id from rental where return_date is null)
+        limit 1;
+    """, (film_id,))
+    
+    inventory = cursor.fetchone()
+    
+    if not inventory:
+        return jsonify({"error": "No copies available for rental"}), 400
+
+    inventory_id = inventory["inventory_id"]
+    rental_date = datetime.now()
+
+    cursor.execute("""
+        insert into rental (rental_date, inventory_id, customer_id, staff_id)
+        values (%s, %s, %s, %s);
+    """, (rental_date, inventory_id, customer_id, staff_id))
+    db.commit()
+
+    return jsonify({"message": "Rental successful", "rental_id": cursor.lastrowid})
+
 if __name__ == '__main__':
     app.run(port=5000, debug=True)
